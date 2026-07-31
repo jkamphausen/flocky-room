@@ -1,0 +1,27 @@
+camera:
+  index: 0
+  width: 3840
+  height: 2160
+  fourcc: MJPG          # zwingend, sonst 5 fps in 4K
+
+detection:
+  input_width: 2560     # Frame wird hierauf skaliert, bevor detektiert wird
+  det_size: 1280        # SCRFD-Eingabegröße
+  min_face_px: 40
+
+recognition:
+  threshold: 0.45       # Cosine-Similarity ab der ein Match gilt
+  vote_window: 5
+  reid_interval: 15     # nur jedes N-te Frame pro Track neu embedden
+
+tracking:
+  iou_threshold: 0.3
+  max_age_frames: 30
+
+attendance:
+  present_timeout_s: 20
+
+display:
+  fullscreen: true
+  output_width: 1920
+  show_similarity: true

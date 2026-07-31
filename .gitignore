@@ -1,0 +1,13 @@
+# Biometrische Daten - gehören unter keinen Umständen ins Repo
+data/photos/
+data/embeddings.npz
+shots/
+*.mp4
+*.mov
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.pytest_cache/
