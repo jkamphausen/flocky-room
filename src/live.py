@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import time
 from collections.abc import Sequence
@@ -89,29 +90,50 @@ def _save_screenshot(frame: Any) -> None:
     LOGGER.info("Screenshot gespeichert: %s", path)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Startet die lokale Kameraanwendung; M4 benötigt keine CLI-Argumente."""
+def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Live-Anwesenheitserkennung")
+    parser.add_argument(
+        "--source",
+        default="camera",
+        metavar="QUELLE",
+        help="'camera' (Standard) oder Pfad zu einer Video-Datei",
+    )
+    return parser.parse_args(argv)
 
-    del argv
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Startet die lokale Kameraanwendung oder eine Video-Datei als Quelle."""
+
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     try:
+        args = _parse_args(argv)
+        source_path = None if args.source == "camera" else Path(args.source)
+        if source_path is not None and not source_path.is_file():
+            LOGGER.error("Video-Datei existiert nicht: %s", source_path)
+            return 1
         config = load_config()
         gallery = Gallery.load()
         ensure_font_available()
         engine = FaceEngine(config)
         tracker = _make_tracker(config)
         attendance = AttendanceRegistry(config.attendance.present_timeout_s)
-        camera_indices = _available_camera_indices()
-        camera_position = camera_indices.index(config.camera.index) if config.camera.index in camera_indices else 0
-        if camera_indices:
-            config = replace(config, camera=replace(config.camera, index=camera_indices[camera_position]))
-        capture = CameraCapture(config)
+        camera_indices: list[int] = []
+        camera_position = 0
+        if source_path is None:
+            camera_indices = _available_camera_indices()
+            camera_position = camera_indices.index(config.camera.index) if config.camera.index in camera_indices else 0
+            if camera_indices:
+                config = replace(config, camera=replace(config.camera, index=camera_indices[camera_position]))
+        capture = CameraCapture(config, source=str(source_path) if source_path is not None else None)
         capture.start()
     except Exception as error:  # noqa: BLE001 - Klarer Startfehler statt Traceback im Vortrag.
         LOGGER.error("Initialisierung fehlgeschlagen: %s", error)
         return 1
 
-    LOGGER.info("Aktive Kamera: Index %d (verfügbar: %s)", config.camera.index, camera_indices)
+    if source_path is None:
+        LOGGER.info("Aktive Kamera: Index %d (verfügbar: %s)", config.camera.index, camera_indices)
+    else:
+        LOGGER.info("Aktive Video-Datei: %s", source_path)
 
     import cv2
 
@@ -185,7 +207,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     _save_screenshot(output)
                 except Exception:
                     LOGGER.exception("Screenshot fehlgeschlagen.")
-            elif key == ord("c") and camera_indices:
+            elif key == ord("c") and source_path is None and camera_indices:
                 camera_indices = _available_camera_indices() or camera_indices
                 next_position = (camera_position + 1) % len(camera_indices)
                 candidate_index = camera_indices[next_position]

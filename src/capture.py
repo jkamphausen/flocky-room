@@ -19,8 +19,10 @@ class CameraCapture:
     Aufrufer behandeln es als unveränderlich.
     """
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, source: int | str | None = None) -> None:
         self._config = config
+        self._source = config.camera.index if source is None else source
+        self._is_file_source = isinstance(self._source, str)
         self._condition = threading.Condition()
         self._stop_requested = threading.Event()
         self._thread: threading.Thread | None = None
@@ -38,13 +40,19 @@ class CameraCapture:
 
         import cv2
 
-        camera = cv2.VideoCapture(self._config.camera.index)
+        camera = cv2.VideoCapture(self._source)
         if not camera.isOpened():
             camera.release()
-            raise RuntimeError("Kamera kann nicht geöffnet werden.")
-        camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*self._config.camera.fourcc))
-        camera.set(cv2.CAP_PROP_FRAME_WIDTH, self._config.camera.width)
-        camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self._config.camera.height)
+            raise RuntimeError("Videoquelle kann nicht geöffnet werden.")
+        if not self._is_file_source:
+            camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*self._config.camera.fourcc))
+            camera.set(cv2.CAP_PROP_FRAME_WIDTH, self._config.camera.width)
+            camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self._config.camera.height)
+        self._frame_interval_s = 0.0
+        if self._is_file_source:
+            source_fps = camera.get(cv2.CAP_PROP_FPS)
+            if source_fps and source_fps > 0:
+                self._frame_interval_s = 1.0 / source_fps
         self._camera = camera
         self._thread = threading.Thread(target=self._reader, name="camera-reader", daemon=True)
         self._thread.start()
@@ -80,12 +88,25 @@ class CameraCapture:
         self._thread = None
 
     def _reader(self) -> None:
+        import cv2
+
         assert self._camera is not None
+        next_read_at = time.monotonic()
         try:
             while not self._stop_requested.is_set():
+                if self._frame_interval_s > 0:
+                    remaining = next_read_at - time.monotonic()
+                    if remaining > 0:
+                        time.sleep(remaining)
+                    next_read_at += self._frame_interval_s
                 ok, frame = self._camera.read()
                 if not ok:
-                    raise RuntimeError("Kamera liefert kein Frame.")
+                    if not self._is_file_source:
+                        raise RuntimeError("Kamera liefert kein Frame.")
+                    self._camera.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    ok, frame = self._camera.read()
+                    if not ok:
+                        raise RuntimeError("Video-Datei liefert kein Frame.")
                 with self._condition:
                     self._latest_frame = frame
                     self._frame_sequence += 1
