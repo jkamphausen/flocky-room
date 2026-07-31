@@ -109,8 +109,13 @@ def render_frame(
         if debug:
             label = f"#{track.track_id} {label}"
         text_box = draw.textbbox((0, 0), label, font=_font(22))
-        label_top = max(header_height, y1 - (text_box[3] - text_box[1]) - 10)
-        draw.rectangle((x1, label_top, x1 + text_box[2] + 12, y1), fill=color)
+        plate_height = (text_box[3] - text_box[1]) + 10
+        # label_bottom bewusst nicht direkt y1, sondern von label_top abgeleitet:
+        # bei einem Gesicht nahe der Kopfzeile wäre y1 < label_top und die Plakette
+        # invertiert (PIL wirft dann "y1 must be greater than or equal to y0").
+        label_top = max(header_height, y1 - plate_height)
+        label_bottom = label_top + plate_height
+        draw.rectangle((x1, label_top, x1 + text_box[2] + 12, label_bottom), fill=color)
         draw.text((x1 + 6, label_top + 3), label, font=_font(22), fill=(15, 20, 25))
 
     return np.ascontiguousarray(np.asarray(image)[:, :, ::-1])
