@@ -6,7 +6,7 @@ camera:
 
 detection:
   input_width: 2560     # Frame wird hierauf skaliert, bevor detektiert wird
-  det_size: 1280        # SCRFD-Eingabegröße
+  det_size: 640         # SCRFD-Eingabegröße; höhere Werte (>640) crashen CoreML auf diesem onnxruntime-silicon 1.16.3
   min_face_px: 40
 
 recognition:
